@@ -1,0 +1,10 @@
+# Netscape HTTP Cookie File
+# http://curl.haxx.se/rfc/cookie_spec.html
+# This is a generated file!  Do not edit.
+
+.agh.edu.pl	TRUE	/	FALSE	1773314427	_ga	GA1.1.194711428.1738754427
+upel.agh.edu.pl	FALSE	/	TRUE	0	MDL_SSP_SessID	eb1a26f2a699de3a8fdd941be13b7012
+upel.agh.edu.pl	FALSE	/	TRUE	0	MDL_SSP_AuthToken	_8134db7d02170fd25e46141f8e161cc058b61e2d9a
+upel.agh.edu.pl	FALSE	/	TRUE	0	MoodleSession	gn6rqejki0aethcm42t6grobgk
+upel.agh.edu.pl	FALSE	/	TRUE	1743946642	MOODLEID1_	sodium%3AWs1MRlu%2FHgCodxHHSErbJX9Y8X0tRHqH4S9IkZChCSGv4qcc8G6gjdZQTR8zTa1zjQ%2FqQ%2BgVTBdbdjbB9fLWbNJOlY87HEPUnQB2iA%3D%3D
+.agh.edu.pl	TRUE	/	FALSE	1773322656	_ga_MJDCY61X9J	GS1.1.1738762512.4.1.1738762656.0.0.0
