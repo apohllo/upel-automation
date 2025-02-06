@@ -37,6 +37,7 @@ defmodule UpelWeb.CookieFetcherLive do
     case entries do
       [content] ->
         cookies = parse_cookie_file(content)
+        IO.inspect(cookies)
         case fetch_html(url, cookies, socket) do
           {:ok, body} ->
             extracted_data = extract_student_data(body)
@@ -111,33 +112,61 @@ defmodule UpelWeb.CookieFetcherLive do
         mark,
         comment,
         socket.assigns.session_id)
-      IO.inspect(post_params)
-      case HTTPoison.post("https://upel.agh.edu.pl/mod/quiz/comment.php",
-        {:form, post_params}, [{"Cookie", socket.assigns.uploaded_cookies}]) do
+      case HTTPoison.get("https://upel.agh.edu.pl/mod/quiz/comment.php?attempt=#{socket.assigns.attempt}&slot=#{index + 1}",
+          [{"Cookie", socket.assigns.uploaded_cookies}]) do
         {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
           IO.inspect("success")
           {:ok, body} = Floki.parse_document(body)
-          body = body
-          |> Floki.find("body")
-          |> Floki.text()
-          IO.inspect(body)
-        {:ok, %HTTPoison.Response{status_code: 404, body: body}} ->
+          http_params = body
+          |> Floki.find("form")
+          |> List.first()
+          |> Floki.find("input")
+          |> Enum.map(fn el -> 
+            elem(el, 1) 
+            |> Keyword.take(["name", "value"]) 
+            |> Enum.map(fn el1 -> 
+              elem(el1, 1) 
+            end) 
+          end)
+          |> List.foldl(%{}, fn el1, acc ->
+            Map.put(acc, List.first(el1), List.last(el1))
+          end) 
+          http_params |> IO.inspect()
+          mark_key = Map.keys(http_params) |> Enum.find(fn el -> Regex.run(~r"-mark$", el) end)
+          mark_key |> IO.inspect()
+          comment_key = String.replace(mark_key, "-mark", "-comment")
+          http_params = http_params
+            |> Map.put(mark_key, mark)
+            |> Map.put(comment_key, comment)
+            |> URI.encode_query()
+
+          case HTTPoison.post("https://upel.agh.edu.pl/mod/quiz/comment.php",
+            http_params, [{"Cookie", socket.assigns.uploaded_cookies},{"Content-Type", "application/x-www-form-urlencoded"}]) do
+            {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+              IO.inspect("success")
+              {:ok, body} = Floki.parse_document(body)
+              body = body
+              |> Floki.find("body")
+              |> Floki.text()
+              IO.inspect(body)
+              body = body
+              |> Floki.find("input")
+              IO.inspect(body)
+            {:ok, %HTTPoison.Response{status_code: 404, body: body}} ->
+              IO.inspect("error 404")
+            {:ok, %HTTPoison.Response{status_code: 303, body: body}} ->
+              IO.inspect("error")
+              {:ok, body} = Floki.parse_document(body)
+              body = body
+              |> Floki.find("body")
+              |> Floki.text()
+              IO.inspect(body)
+            {:error, response} ->
+              IO.inspect("error")
+              IO.inspect(response)
+          end
+        _ ->
           IO.inspect("error")
-          {:ok, body} = Floki.parse_document(body)
-          body = body
-          |> Floki.find("body")
-          |> Floki.text()
-          IO.inspect(body)
-        {:ok, %HTTPoison.Response{status_code: 303, body: body}} ->
-          IO.inspect("error")
-          {:ok, body} = Floki.parse_document(body)
-          body = body
-          |> Floki.find("body")
-          |> Floki.text()
-          IO.inspect(body)
-        {:error, response} ->
-          IO.inspect("error")
-          IO.inspect(response)
       end
     end)
     {:noreply, socket}
@@ -174,7 +203,7 @@ defmodule UpelWeb.CookieFetcherLive do
       "#{question_id}:#{slot_id}_-comment" => comment,
       "#{question_id}:#{slot_id}_-commentformat" => "1",
       "submit" => "Zapisz",
-      "sesskey" => session_id}
+      "sesskey" => session_id} |> URI.encode_query()
   end
 
   defp parse_answers(body) do
