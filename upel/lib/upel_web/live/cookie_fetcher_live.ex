@@ -13,22 +13,23 @@ defmodule UpelWeb.CookieFetcherLive do
      |> assign(:extracted_data, nil)
      |> assign(:qas, [])
      |> assign(:position, nil)
-     |> assign(:question_id, nil)
-     |> assign(:sequence_ids, [])
-     |> assign(:attempt, nil)
-     |> assign(:session_id, nil)
+     |> assign(:error, false)
+     |> assign(:done, false)
      |> allow_upload(:cookie_file, accept: [".txt"], max_entries: 1)}
   end
 
+  @impl true
   def handle_event("validate", %{"_target" => ["cookie_file"]}, socket) do
     {:noreply, socket}
   end
 
+  @impl true
   def handle_event("validate", %{"_target" => ["url"]}, socket) do
     {:noreply, socket}
   end
 
-  def handle_event("upload_cookies", %{"url" => url}, socket) do
+  @impl true
+  def handle_event("fetch_students", %{"url" => url}, socket) do
     entries = consume_uploaded_entries(socket, :cookie_file, fn %{path: path}, _entry ->
       {:ok, content} = File.read(path)
       {:ok, content}
@@ -37,10 +38,10 @@ defmodule UpelWeb.CookieFetcherLive do
     case entries do
       [content] ->
         cookies = parse_cookie_file(content)
-        IO.inspect(cookies)
         case fetch_html(url, cookies, socket) do
           {:ok, body} ->
             extracted_data = extract_student_data(body)
+            IO.inspect(extracted_data)
             {:noreply,
               socket
               |> assign(:uploaded_cookies, cookies)
@@ -58,21 +59,30 @@ defmodule UpelWeb.CookieFetcherLive do
     attempt = List.last(Regex.run(~r'attempt=([^&]+)', url))
     IO.inspect(attempt, label: "Extracted Attempt")
 
-    cookies = socket.assigns.uploaded_cookies
-    case fetch_html(url, cookies, socket) do
+    case fetch_html(url, socket.assigns.uploaded_cookies, socket) do
       {:ok, body} ->
         position = String.to_integer(position)
-        session_id = parse_session_id(body)
         answers = parse_answers(body)
-        question_ids = answers
-        |> Enum.map(fn answer ->
-          {question_code, sequence_id} = answer.sequence
-          [question_id, slot_id, _] = String.split(question_code, ":")
-          {question_id, slot_id, sequence_id}
+        |> Enum.with_index()
+        |> Enum.map(fn {answer, index} ->
+          case read_attempt_params(attempt, index, socket.assigns.uploaded_cookies) do
+            {:ok, params} ->
+              mark_key = Map.keys(params) |> Enum.find(fn el -> Regex.run(~r"-mark$", el) end)
+              comment_key = String.replace(mark_key, "-mark", "-comment")
+              answer = answer
+              |> Map.put(:params, params |> URI.encode_query())
+              |> Map.put(:mark, params[mark_key])
+              |> Map.put(:comment, params[comment_key])
+              case grade_answer(answer.question, answer.answer) do
+                {:ok, grade} ->
+                  answer
+                  |> Map.put(:generated_mark, grade.grade)
+                  |> Map.put(:generated_comment, grade.comment)
+                _ -> answer
+              end
+            _ -> answer
+          end
         end)
-        question_id = elem(List.first(question_ids), 0)
-        sequence_ids = question_ids
-        |> Enum.map(fn {_, _, sequence_id} -> sequence_id end)
 
         IO.inspect(answers)
         IO.inspect(position)
@@ -80,130 +90,153 @@ defmodule UpelWeb.CookieFetcherLive do
         {:noreply,
           socket
           |> assign(:qas, answers)
-          |> assign(:question_id, question_id)
-          |> assign(:sequence_ids, sequence_ids)
           |> assign(:position, position)
-          |> assign(:attempt, attempt)
-          |> assign(:session_id, session_id)}
+          |> assign(:done, false)
+          |> assign(:attempt, attempt)}
       {:error, response} ->
         response
     end
   end
 
   def handle_event("add_feedback", params, socket) do
-    IO.inspect(params)
 
     feedbacks = Enum.map(1..3, fn index ->
       comment = Enum.at(params["comment"], index - 1)
       mark = Enum.at(params["mark"], index - 1)
-      sequence_id = Enum.at(params["sequence_ids"], index - 1)
-
-      {comment, mark, sequence_id}
+      http_params = Enum.at(params["params"], index - 1)
+      {comment, mark, http_params}
     end)
     IO.inspect(feedbacks)
 
-    feedbacks
-    |> Enum.with_index()
-    |> Enum.each(fn {{comment, mark, sequence_id}, index} ->
-      post_params = build_post_params(socket.assigns.attempt,
-        socket.assigns.question_id,
-        1 + index,
-        sequence_id,
-        mark,
-        comment,
-        socket.assigns.session_id)
-      case HTTPoison.get("https://upel.agh.edu.pl/mod/quiz/comment.php?attempt=#{socket.assigns.attempt}&slot=#{index + 1}",
-          [{"Cookie", socket.assigns.uploaded_cookies}]) do
-        {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-          IO.inspect("success")
-          {:ok, body} = Floki.parse_document(body)
-          http_params = body
-          |> Floki.find("form")
-          |> List.first()
-          |> Floki.find("input")
-          |> Enum.map(fn el -> 
-            elem(el, 1) 
-            |> Keyword.take(["name", "value"]) 
-            |> Enum.map(fn el1 -> 
-              elem(el1, 1) 
-            end) 
-          end)
-          |> List.foldl(%{}, fn el1, acc ->
-            Map.put(acc, List.first(el1), List.last(el1))
-          end) 
-          http_params |> IO.inspect()
-          mark_key = Map.keys(http_params) |> Enum.find(fn el -> Regex.run(~r"-mark$", el) end)
-          mark_key |> IO.inspect()
-          comment_key = String.replace(mark_key, "-mark", "-comment")
-          http_params = http_params
-            |> Map.put(mark_key, mark)
-            |> Map.put(comment_key, comment)
-            |> URI.encode_query()
+    error = feedbacks
+    |> List.foldl(false, fn {comment, mark, http_params}, error ->
+      http_params = http_params
+      |> URI.decode_query()
+      |> IO.inspect()
 
-          case HTTPoison.post("https://upel.agh.edu.pl/mod/quiz/comment.php",
-            http_params, [{"Cookie", socket.assigns.uploaded_cookies},{"Content-Type", "application/x-www-form-urlencoded"}]) do
-            {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-              IO.inspect("success")
-              {:ok, body} = Floki.parse_document(body)
-              body = body
-              |> Floki.find("body")
-              |> Floki.text()
-              IO.inspect(body)
-              body = body
-              |> Floki.find("input")
-              IO.inspect(body)
-            {:ok, %HTTPoison.Response{status_code: 404, body: body}} ->
-              IO.inspect("error 404")
-            {:ok, %HTTPoison.Response{status_code: 303, body: body}} ->
-              IO.inspect("error")
-              {:ok, body} = Floki.parse_document(body)
-              body = body
-              |> Floki.find("body")
-              |> Floki.text()
-              IO.inspect(body)
-            {:error, response} ->
-              IO.inspect("error")
-              IO.inspect(response)
-          end
-        _ ->
+      mark_key = Map.keys(http_params) |> Enum.find(fn el -> Regex.run(~r"-mark$", el) end)
+      comment_key = String.replace(mark_key, "-mark", "-comment")
+      http_params = http_params
+        |> Map.put(mark_key, mark)
+        |> Map.put(comment_key, comment)
+        |> URI.encode_query()
+
+      case HTTPoison.post("https://upel.agh.edu.pl/mod/quiz/comment.php",
+        http_params, [{"Cookie", socket.assigns.uploaded_cookies},{"Content-Type", "application/x-www-form-urlencoded"}]) do
+        {:ok, %HTTPoison.Response{status_code: 200, body: _body}} ->
+          IO.inspect("success")
+          error
+        {:ok, %HTTPoison.Response{status_code: 404, body: _body}} ->
+          IO.inspect("error 404")
+          true
+        {:ok, %HTTPoison.Response{status_code: 303, body: _body}} ->
+          IO.inspect("error 303")
+          true
+        {:error, response} ->
           IO.inspect("error")
+          IO.inspect(response)
+          true
       end
     end)
-    {:noreply, socket}
-  end
-
-  defp parse_session_id(body) do
-    case Floki.parse_document(body) do
-      {:ok, document} ->
-        href = document
-        |> Floki.find("a[href*='logout']")
-        |> List.first()
-        |> Floki.attribute("href")
-        |> List.first()
-
-        Regex.run(~r/sesskey=([^&]+)/, href)
-        |> case do
-          [_, key] -> key
-          _ -> nil
-        end
-      _ ->
-        nil
+    if error do
+      {:noreply, socket |> assign(:error, true)}
+    else
+      {:noreply, socket |> assign(:error, false) |> assign(:done, true)}
     end
   end
 
-  defp build_post_params(attempt, question_id, slot_id, sequence_id, mark, comment, session_id) do
-    %{"attempt" => attempt,
-      "slot" => slot_id,
-      "slots" => slot_id,
-      "#{question_id}:#{slot_id}_:sequencecheck" => sequence_id,
-      "#{question_id}:#{slot_id}_-mark" => mark,
-      "#{question_id}:#{slot_id}_-maxmark" => "1",
-      "#{question_id}:#{slot_id}_:minfraction" => "0",
-      "#{question_id}:#{slot_id}_:maxfraction" => "1",
-      "#{question_id}:#{slot_id}_-comment" => comment,
-      "#{question_id}:#{slot_id}_-commentformat" => "1",
-      "submit" => "Zapisz",
-      "sesskey" => session_id} |> URI.encode_query()
+  defp grade_answer(question, answer) do
+    model = System.get_env("API_MODEL") || "gpt-3.5-turbo"
+    api_key = System.get_env("API_KEY")
+    api_url = System.get_env("API_URL") || "https://api.openai.com/v1/chat/completions"
+
+    IO.inspect(model)
+
+    headers = [
+      {"Authorization", "Bearer #{api_key}"},
+      {"Content-Type", "application/json"}
+    ]
+
+    body = Jason.encode!(%{
+      "model" => model,
+      "messages" => [
+        %{
+          "role" => "system",
+          "content" =>
+            "Jesteś ekspertem w zakresie oceniania odpowiedzi uczniów.\n" <>
+            "Twoim zadaniem jest ocena jakości i poprawności odpowiedzi ucznia w skali od 0 do 1.\n" <>
+            "Zwróć ocenę jako 'grade' a komentarz jako 'comment' w formacie JSON.\n" <>
+            "Nie dodawaj żadnego formatowania (np. ```json itp.), poza treścią dokumentu JSON.\n" <>
+            "Komentarz powinien być zwięzły i skierowany wprost do ucznia.\n" <>
+            "Zwróć tylko JSON, nic więcej."
+        },
+        %{
+          "role" => "user",
+          "content" => "Pytanie: #{question}\nOdpowiedź ucznia: #{answer}\nOceń jakość i poprawność tej odpowiedzi w skali od 0 do 1."
+        }
+      ],
+      "temperature" => 0
+    })
+
+    case HTTPoison.post(api_url, body, headers) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
+        case Jason.decode(response_body) do
+          {:ok, decoded} ->
+            case Jason.decode(Map.get(decoded, "choices") |> List.first() |> Map.get("message") |> Map.get("content")) do
+              {:ok, inner_decoded} ->
+                {:ok, Map.new(inner_decoded, fn {k, v} -> {String.to_atom(k), v} end)}
+              {:error, error} ->
+                IO.inspect("error in decoding inner JSON")
+                {:error, "Failed to parse API response"}
+            end
+          _ ->
+            IO.inspect("error in decoding outer JSON")
+            {:error, "Failed to parse API response"}
+        end
+      {status, response} ->
+        IO.inspect("error in getting response from API")
+        IO.inspect(status)
+        IO.inspect(response)
+        {:error, "Failed to get response from API"}
+    end
+  end
+
+
+  defp read_attempt_params(attempt, index, cookies) do
+    case HTTPoison.get("https://upel.agh.edu.pl/mod/quiz/comment.php?attempt=#{attempt}&slot=#{index + 1}",
+        [{"Cookie", cookies}]) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        IO.inspect("success")
+        {:ok, body} = Floki.parse_document(body)
+        html_form = body
+        |> Floki.find("form")
+        |> List.first()
+
+        {:ok, extract_params(html_form, "input")
+        |> Map.merge(html_form
+          |> Floki.find("textarea")
+          |> Enum.map(fn el ->
+            name = el |> Floki.attribute("name") |> List.first()
+            value = el |> Floki.text()
+            {name, value}
+          end)
+          |> Enum.into(%{}))}
+      _ ->
+        IO.inspect("error")
+        {:error, "error"}
+    end
+  end
+
+  defp extract_params(html_doc, tag) do
+    html_doc
+    |> Floki.find(tag)
+    |> Enum.map(fn {_tag, attrs, _children} ->
+      Keyword.take(attrs, ["name", "value"])
+      |> Enum.map(fn {_key, value} -> value end)
+    end)
+    |> List.foldl(%{}, fn el1, acc ->
+      Map.put(acc, List.first(el1), List.last(el1))
+    end)
   end
 
   defp parse_answers(body) do
@@ -272,26 +305,33 @@ defmodule UpelWeb.CookieFetcherLive do
     case Floki.parse_document(html) do
       {:ok, document} ->
         document
-        |> Floki.find("td[class*='sticky-column']")
-        |> Enum.map(fn row ->
-          name = row
-                 |> Floki.find("a")  # Find the anchor tag within the sticky column
-                 |> List.first()
-                 |> Floki.text()
-                 |> String.trim()
+        |> Floki.find("tr[id^='mod-quiz-report-overview-report']")
+        |> Enum.map(fn tr ->
+          student_cell = tr |> Floki.find("td[class*='sticky-column']") |> List.first()
 
-          url = row
-                |> Floki.find("a")
-                |> List.last()
-                |> case do
-                     nil -> nil
-                     link -> Floki.attribute(link, "href") |> List.first()
-                   end
+          case student_cell do
+            nil -> %{name: nil, url: nil, summary: nil}
+            cell ->
+              name = cell
+              |> Floki.find("a")
+              |> List.first()
+              |> Floki.text()
+              |> String.trim()
 
-          tuple = %{name: name, url: url}
-          tuple
+            url = student_cell
+            |> Floki.find("a")
+            |> List.last()
+            |> case do
+                  nil -> nil
+                  link -> Floki.attribute(link, "href") |> List.first()
+                end
+
+            grade_summary = tr |> Floki.find("td.c9") |> List.first() |> Floki.text() |> String.trim()
+
+            %{name: name, url: url, summary: grade_summary}
+          end
         end)
-        |> Enum.filter(fn %{name: name, url: url} -> name != nil and url != nil end)
+        |> Enum.filter(fn %{name: name, url: url, summary: _summary} -> name != nil and url != nil end)
 
       _ ->
         IO.inspect("error parsing html")

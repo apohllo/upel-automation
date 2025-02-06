@@ -1,7 +1,7 @@
 <div class="max-w-4xl mx-auto p-6">
   <h1 class="text-2xl font-bold mb-6">UPEL grader</h1>
 
-  <form phx-submit="upload_cookies" phx-change="validate" class="space-y-4">
+  <form phx-submit="fetch_students" phx-change="validate" class="space-y-4">
     <div>
       <label class="block text-sm font-medium text-gray-700">Cookie File</label>
       <div class="mt-1">
@@ -54,44 +54,47 @@
       <h2 class="text-xl font-semibold mb-4">Students</h2>
       <ul>
       <li>
-        <%= for {%{name: name, url: url}, index} <- Enum.with_index(@extracted_data) do %>
+        <%= for {item, index} <- Enum.with_index(@extracted_data) do %>
           <form phx-submit="fetch_answers">
-            <a href={url}><%= name %></a>
-            <input type="hidden" name="url" value={url} />
+            <a href={item.url}><%= item.name %> - <%= item.summary %></a>
+            <input type="hidden" name="url" value={item.url} />
             <input type="hidden" name="position" value={index} />
-            <input type="hidden" name="attempt" value={@attempt} />
-            <input type="hidden" name="session_id" value={@session_id} />
             <br/>
             <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md">Fetch Answers</button>
           </form>
 
-          <%= if Enum.count(@qas) > 0 && @position == index do %>
+          <%= if Enum.count(@qas) > 0 && @position == index && !@done do %>
             <form phx-submit="add_feedback" class="mt-4">
-            <input type="hidden" name="question_id" value={@question_id} />
-            <%= for sequence_id <- @sequence_ids do %>
-              <input type="hidden" name="sequence_ids[]" value={sequence_id} />
-            <% end %>
-            <div class="mt-4"> <!-- Added margin-top for spacing -->
+            <div class="mt-4">
               <%= for {item, index} <- Enum.with_index(@qas) do %>
+                <input type="hidden" name="params[]" value={item.params} />
                 <p class="text-sm font-bold">
                   <%= index + 1 %>. <%= item.question %>
                 </p>
                 <p class="text-sm">
                   <%= item.answer %>
                 </p>
-                  <div class="mt-2">
-                    <label class="block text-sm font-medium text-gray-700">Mark</label>
-                    <input type="text" name="mark[]" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
-                  </div>
-                  <div class="mt-2">
-                    <label class="block text-sm font-medium text-gray-700">Comment</label>
-                    <textarea name="comment[]" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
-                  </div>
-
+                <div class="mt-2">
+                  <label class="block text-sm font-medium text-gray-700">Mark:</label> <%= item.mark %>
+                  <input type="text" name="mark[]" value={item.generated_mark} class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+                </div>
+                <div class="mt-2">
+                  <label class="block text-sm font-medium text-gray-700">Comment:</label>
+                  <p><%= item.comment %></p>
+                  <textarea name="comment[]" rows="6" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <%= item.generated_comment %>
+                  </textarea>
+                </div>
               <% end %>
               <button type="submit" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded-md">Add Feedback</button>
             </div>
             </form>
+          <% end %>
+          <%= if @error && @position == index do %>
+            <p class="text-red-500">Error</p>
+          <% end %>
+          <%= if @done && @position == index do %>
+            <p class="text-green-500">Done</p>
           <% end %>
         <% end %>
         </li>

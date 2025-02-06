@@ -17,8 +17,7 @@ defmodule UpelWeb.Router do
   scope "/", UpelWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
-    live "/cookie-fetcher", CookieFetcherLive
+    live "/", CookieFetcherLive
   end
 
   # Other scopes may use custom stacks.
