@@ -112,7 +112,6 @@ defmodule UpelWeb.CookieFetcherLive do
     |> List.foldl(false, fn {comment, mark, http_params}, error ->
       http_params = http_params
       |> URI.decode_query()
-      |> IO.inspect()
 
       mark_key = Map.keys(http_params) |> Enum.find(fn el -> Regex.run(~r"-mark$", el) end)
       comment_key = String.replace(mark_key, "-mark", "-comment")
@@ -124,7 +123,6 @@ defmodule UpelWeb.CookieFetcherLive do
       case HTTPoison.post("https://upel.agh.edu.pl/mod/quiz/comment.php",
         http_params, [{"Cookie", socket.assigns.uploaded_cookies},{"Content-Type", "application/x-www-form-urlencoded"}]) do
         {:ok, %HTTPoison.Response{status_code: 200, body: _body}} ->
-          IO.inspect("success")
           error
         {:ok, %HTTPoison.Response{status_code: 404, body: _body}} ->
           IO.inspect("error 404")
@@ -165,9 +163,11 @@ defmodule UpelWeb.CookieFetcherLive do
           "content" =>
             "Jesteś ekspertem w zakresie oceniania odpowiedzi uczniów.\n" <>
             "Twoim zadaniem jest ocena jakości i poprawności odpowiedzi ucznia w skali od 0 do 1.\n" <>
+            "Komentarz powinien być zwięzły, nie używaj form drugoosobowych.\n" <>
+            "Zamiast 'Powinieneś bardziej dokładnie zdefiniować to pojęcie' użyj 'Pojęcie powinno być zdefiniowane dokładniej'.\n" <>
+            "Zamiast 'Dodaj informację o drugim problemie' użyj 'Odpowiedź powinna zawierać również informacje o drugim problemie'.\n" <>
             "Zwróć ocenę jako 'grade' a komentarz jako 'comment' w formacie JSON.\n" <>
             "Nie dodawaj żadnego formatowania (np. ```json itp.), poza treścią dokumentu JSON.\n" <>
-            "Komentarz powinien być zwięzły i skierowany wprost do ucznia.\n" <>
             "Zwróć tylko JSON, nic więcej."
         },
         %{
@@ -187,17 +187,17 @@ defmodule UpelWeb.CookieFetcherLive do
                 {:ok, Map.new(inner_decoded, fn {k, v} -> {String.to_atom(k), v} end)}
               {:error, error} ->
                 IO.inspect("error in decoding inner JSON")
-                {:error, "Failed to parse API response"}
+                {:ok, %{grade: "", comment: "Nie udało się ocenić odpowiedzi. Spróbuj ponownie."}}
             end
           _ ->
             IO.inspect("error in decoding outer JSON")
-            {:error, "Failed to parse API response"}
+            {:ok, %{grade: "", comment: "Nie udało się ocenić odpowiedzi. Spróbuj ponownie."}}
         end
       {status, response} ->
         IO.inspect("error in getting response from API")
         IO.inspect(status)
         IO.inspect(response)
-        {:error, "Failed to get response from API"}
+        {:ok, %{grade: "", comment: "Nie udało się ocenić odpowiedzi. Spróbuj ponownie."}}
     end
   end
 

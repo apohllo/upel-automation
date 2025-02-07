@@ -56,7 +56,7 @@
       <li>
         <%= for {item, index} <- Enum.with_index(@extracted_data) do %>
           <form phx-submit="fetch_answers">
-            <a href={item.url}><%= item.name %> - <%= item.summary %></a>
+            <a href={item.url}><!-- <%= item.name %> --> Student/ka - <%= item.summary %></a>
             <input type="hidden" name="url" value={item.url} />
             <input type="hidden" name="position" value={index} />
             <br/>
