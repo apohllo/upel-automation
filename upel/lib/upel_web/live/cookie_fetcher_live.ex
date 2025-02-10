@@ -11,7 +11,7 @@ defmodule UpelWeb.CookieFetcherLive do
      |> assign(:url, "https://upel.agh.edu.pl/mod/quiz/report.php?id=193798&mode=overview&attempts=enrolled_with&onlygraded=&group=9163&onlyregraded=&slotmarks=1&group=9164")
      |> assign(:html_content, nil)
      |> assign(:extracted_data, nil)
-     |> assign(:qas, [])
+     |> stream(:qas, [])
      |> assign(:position, nil)
      |> assign(:error, false)
      |> assign(:done, false)
@@ -57,44 +57,60 @@ defmodule UpelWeb.CookieFetcherLive do
 
   def handle_event("fetch_answers", %{"url" => url, "position" => position}, socket) do
     attempt = List.last(Regex.run(~r'attempt=([^&]+)', url))
-    IO.inspect(attempt, label: "Extracted Attempt")
+
 
     case fetch_html(url, socket.assigns.uploaded_cookies, socket) do
       {:ok, body} ->
         position = String.to_integer(position)
-        answers = parse_answers(body)
-        |> Enum.with_index()
-        |> Enum.map(fn {answer, index} ->
-          case read_attempt_params(attempt, index, socket.assigns.uploaded_cookies) do
-            {:ok, params} ->
-              mark_key = Map.keys(params) |> Enum.find(fn el -> Regex.run(~r"-mark$", el) end)
-              comment_key = String.replace(mark_key, "-mark", "-comment")
-              answer = answer
-              |> Map.put(:params, params |> URI.encode_query())
-              |> Map.put(:mark, params[mark_key])
-              |> Map.put(:comment, params[comment_key])
-              case grade_answer(answer.question, answer.answer) do
-                {:ok, grade} ->
-                  answer
-                  |> Map.put(:generated_mark, grade.grade)
-                  |> Map.put(:generated_comment, grade.comment)
-                _ -> answer
+        send_update(UpelWeb.AnswersComponent, id: position, evaluate: true)
+        pid = self()
+        Task.start(fn ->
+          parse_answers(body)
+          |> Enum.with_index()
+          |> List.foldl([], fn {answer, index}, answers ->
+            answer = answer
+              |> Map.put(:generated_mark, "not generated")
+              |> Map.put(:generated_comment, "not generated")
+              case read_attempt_params(attempt, index, socket.assigns.uploaded_cookies) do
+                {:ok, params} ->
+                  mark_key = Map.keys(params) |> Enum.find(fn el -> Regex.run(~r"-mark$", el) end)
+                  comment_key = String.replace(mark_key, "-mark", "-comment")
+                  answer = answer
+                  |> Map.put(:params, params |> URI.encode_query())
+                  |> Map.put(:mark, params[mark_key])
+                  |> Map.put(:comment, params[comment_key])
+                  |> Map.put(:index, index)
+                  case grade_answer(answer.question, answer.answer) do
+                    {:ok, grade} ->
+                      answer = answer
+                      |> Map.put(:generated_mark, grade.grade)
+                      |> Map.put(:generated_comment, grade.comment)
+                      answers = answers ++ [answer]
+                      send_update(pid, UpelWeb.AnswersComponent, id: position, qas: answers)
+                      answers
+                    _ ->
+                      IO.inspect("error in grading answer")
+                      send_update(pid, UpelWeb.AnswersComponent, id: position, qas: answers)
+                      answers
+                  end
+                _ ->
+                  IO.inspect("error in reading attempt params")
+                  answers = answers ++ [answer]
+                  send_update(pid, UpelWeb.AnswersComponent, id: position, qas: answers)
+                  answers
               end
-            _ -> answer
-          end
+            end)
         end)
-
-        IO.inspect(answers)
-        IO.inspect(position)
 
         {:noreply,
           socket
-          |> assign(:qas, answers)
+          #|> assign(:qas, answers)
           |> assign(:position, position)
           |> assign(:done, false)
           |> assign(:attempt, attempt)}
       {:error, response} ->
-        response
+        IO.inspect(response)
+        {:noreply, socket |> assign(:error, true)}
     end
   end
 

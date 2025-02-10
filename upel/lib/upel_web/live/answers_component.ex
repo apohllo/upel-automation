@@ -1,0 +1,35 @@
+defmodule UpelWeb.AnswersComponent do
+  use UpelWeb, :live_component
+
+  def render(assigns) do
+    ~H"""
+    <div>
+    <%= if @evaluate do %>
+    <form phx-submit="add_feedback" class="mt-4">
+    <div class="mt-4">
+        <%= for item <- @qas do %>
+        <input type="hidden" name="params[]" value={item.params} />
+        <p class="text-sm font-bold">
+            <%= item.index + 1 %>. <%= item.question %>
+        </p>
+        <p class="text-sm">
+            <%= item.answer %>
+        </p>
+        <div class="mt-2">
+            <label class="block text-sm font-medium text-gray-700">Mark:</label> <%= item.mark %>
+            <input type="text" name="mark[]" value={item.generated_mark} class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+        </div>
+        <div class="mt-2">
+            <label class="block text-sm font-medium text-gray-700">Comment:</label>
+            <p><%= item.comment %></p>
+            <textarea name="comment[]" rows="6" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"><%= item.generated_comment %></textarea>
+        </div>
+        <% end %>
+        <button type="submit" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded-md">Add Feedback</button>
+    </div>
+    </form>
+    <% end %>
+    </div>
+    """
+  end
+end
