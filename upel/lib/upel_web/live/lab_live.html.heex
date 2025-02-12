@@ -1,0 +1,60 @@
+<div class="max-w-4xl mx-auto p-6">
+  <h1 class="text-2xl font-bold mb-6">Labs</h1>
+  <.live_component
+    module={UpelWeb.StudentsComponent}
+    id="students"
+    on_fetch={fn cookies, data -> send(self(), {:fetch_students, cookies, data}) end}
+  />
+  <%= if @html_content do %>
+    <div class="mt-8">
+      <h2 class="text-xl font-semibold mb-4">Fetched HTML Content</h2>
+      <pre class="bg-gray-50 p-4 rounded-md overflow-x-auto">
+        <code><%= @html_content %></code>
+      </pre>
+    </div>
+  <% end %>
+  <%= if @extracted_data do %>
+    <div class="mt-8">
+      <h2 class="text-xl font-semibold mb-4">Students</h2>
+      <ul>
+      <li>
+        <%= for {item, index} <- Enum.with_index(@extracted_data) do %>
+          <form phx-submit="fetch_answers">
+            <a href={item.url}><%= item.name %> - <%= item.grade %></a>
+            <input type="hidden" name="answer_url" value={item.url} />
+            <input type="hidden" name="position" value={index} />
+            <br/>
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md">Fetch Answers</button>
+          </form>
+
+        <%= if @position == index && !@done do %>
+        <form phx-submit="add_feedback" class="mt-4">
+            <div class="mt-4">
+                <input type="hidden" name="params" value={@item.params} />
+                <input type="hidden" name="assignment_id" value={@item.assignment_id} />
+                <div class="mt-2">
+                    <label class="block text-sm font-medium text-gray-700">Mark:</label> <%= @item.mark %>
+                    <input type="text" name="mark" value={@item.generated_mark} class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+                </div>
+                <div class="mt-2">
+                    <label class="block text-sm font-medium text-gray-700">Comment:</label>
+                    <p><%= @item.comment %></p>
+                    <textarea name="comment" rows="6" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"><%= @item.generated_comment %></textarea>
+                </div>
+                <button type="submit" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded-md">Add Feedback</button>
+            </div>
+        </form>
+        <% end %>
+
+          <%= if @error && @position == index do %>
+            <p class="text-red-500">Error</p>
+          <% end %>
+          <%= if @done && @position == index do %>
+            <p class="text-green-500">Done</p>
+          <% end %>
+        <% end %>
+        </li>
+      </ul>
+    </div>
+  <% end %>
+</div>

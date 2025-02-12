@@ -56,7 +56,8 @@ defmodule Upel.MixProject do
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.2"},
       {:httpoison, "~> 2.0"},
-      {:dotenv, "~> 3.1.0"}
+      {:dotenv, "~> 3.1.0"},
+      {:html_entities, "~> 0.5"}
     ]
   end
 

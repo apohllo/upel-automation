@@ -1,0 +1,44 @@
+<div class="max-w-4xl mx-auto p-6">
+  <h1 class="text-2xl font-bold mb-6">Quiz</h1>
+
+  <.live_component
+    module={UpelWeb.StudentsComponent}
+    id="students"
+    on_fetch={fn data -> send(self(), {:fetch_students, data}) end}
+  />
+
+  <%= if @html_content do %>
+    <div class="mt-8">
+      <h2 class="text-xl font-semibold mb-4">Fetched HTML Content</h2>
+      <pre class="bg-gray-50 p-4 rounded-md overflow-x-auto">
+        <code><%= @html_content %></code>
+      </pre>
+    </div>
+  <% end %>
+  <%= if @extracted_data do %>
+    <div class="mt-8">
+      <h2 class="text-xl font-semibold mb-4">Students</h2>
+      <ul>
+      <li>
+        <%= for {item, index} <- Enum.with_index(@extracted_data) do %>
+          <form phx-submit="fetch_answers">
+            <a href={item.url}><!-- <%= item.name %> --> Student/ka - <%= item.summary %></a>
+            <input type="hidden" name="url" value={item.url} />
+            <input type="hidden" name="position" value={index} />
+            <br/>
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md">Fetch Answers</button>
+          </form>
+          <.live_component module={UpelWeb.AnswersComponent} id={index} evaluate={false} qas={[]} />
+
+          <%= if @error && @position == index do %>
+            <p class="text-red-500">Error</p>
+          <% end %>
+          <%= if @done && @position == index do %>
+            <p class="text-green-500">Done</p>
+          <% end %>
+        <% end %>
+        </li>
+      </ul>
+    </div>
+  <% end %>
+</div>

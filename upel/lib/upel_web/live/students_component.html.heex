@@ -1,0 +1,45 @@
+<form
+    phx-submit="fetch_students"
+    phx-change="validate"
+    phx-drop-target={@uploads.cookie_file.ref}
+    phx-target={@myself}
+    class="space-y-4"
+    id="fetch-students">
+<div>
+    <label class="block text-sm font-medium text-gray-700">Cookie File</label>
+    <div class="mt-1">
+    <.live_file_input upload={@uploads.cookie_file} class="block w-full text-sm text-gray-500
+        file:mr-4 file:py-2 file:px-4
+        file:rounded-md file:border-0
+        file:text-sm file:font-semibold
+        file:bg-blue-50 file:text-blue-700
+        hover:file:bg-blue-100" />
+    </div>
+    <%= for entry <- @uploads.cookie_file.entries do %>
+    <div class="mt-2">
+        <div class="text-sm text-gray-600">
+        <%= entry.client_name %> - <%= entry.progress %>%
+        </div>
+        <%= if entry.valid? do %>
+        <div class="text-xs text-green-500">Ready to upload</div>
+        <% else %>
+        <div class="text-xs text-red-500">
+            <%= entry.errors |> Enum.map(fn {msg, _} -> msg end) |> Enum.join(", ") %>
+        </div>
+        <% end %>
+    </div>
+    <% end %>
+</div>
+
+<div>
+    <label class="block text-sm font-medium text-gray-700">URL to Fetch</label>
+    <input type="url" name="url" value={@url} required
+    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+    placeholder=""/>
+</div>
+
+<button type="submit"
+    class="inline-flex justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+    Fetch Students
+</button>
+</form>

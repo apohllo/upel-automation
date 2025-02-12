@@ -17,7 +17,8 @@ defmodule UpelWeb.Router do
   scope "/", UpelWeb do
     pipe_through :browser
 
-    live "/", CookieFetcherLive
+    live "/", QuizLive
+    live "/lab", LabLive
   end
 
   # Other scopes may use custom stacks.
