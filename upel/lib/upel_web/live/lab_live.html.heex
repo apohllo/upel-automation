@@ -20,7 +20,13 @@
       <li>
         <%= for {item, index} <- Enum.with_index(@extracted_data) do %>
           <form phx-submit="fetch_answers">
-            <a href={item.url}><%= item.name %> - <%= item.grade %></a>
+            <a href={item.url}><%= item.name %> - <%= item.grade %></a> 
+            <ul>
+              <%= for {link, title} <- item.notebooks do %>
+              <li><a href={link}><%= title %></a></li>
+              <input type="hidden" name="files[]" value={link} />
+              <% end %>
+            </ul>
             <input type="hidden" name="answer_url" value={item.url} />
             <input type="hidden" name="position" value={index} />
             <br/>
@@ -32,6 +38,10 @@
             <div class="mt-4">
                 <input type="hidden" name="params" value={@item.params} />
                 <input type="hidden" name="assignment_id" value={@item.assignment_id} />
+                <%= for link <- @item.files do %>
+                  <li><a href={link}>plik</a></li>
+                  <input type="hidden" name="files[]" value={link} />
+                <% end %>
                 <div class="mt-2">
                     <label class="block text-sm font-medium text-gray-700">Mark:</label> <%= @item.mark %>
                     <input type="text" name="mark" value={@item.generated_mark} class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />

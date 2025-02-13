@@ -17,6 +17,7 @@ defmodule UpelWeb.LabLive do
 
   @impl true
   def handle_info({:fetch_students, cookies, data}, socket) do
+    IO.inspect(data)
     case data do
       {:ok, html} ->
         extracted_data = extract_student_data(html)
@@ -30,8 +31,9 @@ defmodule UpelWeb.LabLive do
     end
   end
 
+
   @impl true
-  def handle_event("fetch_answers", %{"answer_url" => url, "position" => position}, socket) do
+  def handle_event("fetch_answers", %{"answer_url" => url, "position" => position, "files" => files}, socket) do
     item = %{mark: "", comment: "", params: "", generated_mark: "", generated_comment: ""}
     position = String.to_integer(position)
     userid = List.last(Regex.run(~r"userid=(\d+)", url))
@@ -40,10 +42,14 @@ defmodule UpelWeb.LabLive do
       {:ok, html} ->
         case extract_grade(html, userid, socket.assigns.uploaded_cookies) do
           {:ok, %{grade: grade, comment: comment, params: params, assignment_id: assignment_id}} ->
+            solutions = files
+            |> Enum.map(fn link -> extract_solution(link, socket.assigns.uploaded_cookies) end)
+            
             item = item
             |> Map.put(:mark, grade)
             |> Map.put(:comment, comment)
             |> Map.put(:assignment_id, assignment_id)
+            |> Map.put(:files, files)
             |> Map.put(:params, URI.encode_query(params))
             {:noreply, socket
             |> assign(:position, position)
@@ -96,6 +102,16 @@ defmodule UpelWeb.LabLive do
     end
   end
 
+  defp extract_solution(link, cookies) do
+    case HTTPoison.get(link,[{"Cookie", cookies}]) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        IO.inspect(body)
+        {:ok, body}
+      _ ->
+        {:error}
+    end
+  end 
+
   defp extract_grade(html, userid, cookies) do
     sesskey = List.last(Regex.run(~r"\"sesskey\":\"(.*?)\"", html))
     contextid = List.last(Regex.run(~r"\"contextid\":(.*?),", html))
@@ -122,7 +138,6 @@ defmodule UpelWeb.LabLive do
         # Process the response body as needed
         parsed_body = Jason.decode!(body)
         html = parsed_body |> List.first |> Map.get("data") |> Map.get("html")
-        IO.inspect(html)
         case Floki.parse_document(html) do
           {:ok, document} ->
              grade = document
@@ -131,7 +146,6 @@ defmodule UpelWeb.LabLive do
              |> Floki.attribute("value")
              |> List.first()
 
-             IO.inspect(grade)
 
             comment = document
              |> Floki.find("#id_assignfeedbackcomments_editor")
@@ -142,7 +156,6 @@ defmodule UpelWeb.LabLive do
              |> String.replace("\\n", "\n")
              |> Floki.text()
 
-            IO.inspect(comment)
 
             inputs = document
             |> Floki.find("input")
@@ -152,7 +165,6 @@ defmodule UpelWeb.LabLive do
               {name, value}
             end)
             |> Enum.into(%{})
-            IO.inspect(inputs)
 
 
         {:ok, %{grade: grade, comment: comment, params: inputs, assignment_id: assignment_id}}
@@ -173,20 +185,26 @@ defmodule UpelWeb.LabLive do
           student_cell = tr |> Floki.find("td[class*='username']") |> List.first()
 
           case student_cell do
-            nil -> %{name: nil, url: nil, grade: nil}
+            nil -> %{name: nil, url: nil, grade: nil, notebooks: []}
             cell ->
               name = cell
               |> Floki.find("a")
               |> List.first()
               |> Floki.text()
               |> String.trim()
-              |> String.slice(2..-1)
+              |> String.slice(2..-1//1)
 
             url = tr |> Floki.find("td.grade") |> Floki.find("a.dropdown-item") |> Floki.attribute("href") |> List.first()
 
             grade = tr |> Floki.find("td.grade") |> Floki.find("div[class*='w-100']") |> Floki.text() |> HtmlEntities.decode()
 
-            %{name: name, url: url, grade: grade}
+            links = tr |> Floki.find("div[class*='fileuploadsubmission'] > a") #|> Floki.attribute("href") 
+            urls = links |> Floki.attribute("href") 
+            names = links |> Enum.map(fn el -> el |> Floki.text() end)
+            notebooks = List.zip([urls, names])
+            IO.inspect(notebooks)
+
+            %{name: name, url: url, grade: grade, notebooks: notebooks}
           end
         end)
         |> Enum.filter(fn %{name: name, url: url} -> name != nil and url != nil end)

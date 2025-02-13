@@ -24,6 +24,7 @@ defmodule UpelWeb.StudentsComponent do
     IO.inspect(url)
     entries = consume_uploaded_entries(socket, :cookie_file, fn %{path: path}, _entry ->
       {:ok, content} = File.read(path)
+      File.write!("cookies.txt", content)
       {:ok, content}
     end)
 
