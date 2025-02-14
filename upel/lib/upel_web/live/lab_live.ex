@@ -44,7 +44,7 @@ defmodule UpelWeb.LabLive do
           {:ok, %{grade: grade, comment: comment, params: params, assignment_id: assignment_id}} ->
             solutions = files
             |> Enum.map(fn link -> extract_solution(link, socket.assigns.uploaded_cookies) end)
-            
+
             item = item
             |> Map.put(:mark, grade)
             |> Map.put(:comment, comment)
@@ -105,12 +105,66 @@ defmodule UpelWeb.LabLive do
   defp extract_solution(link, cookies) do
     case HTTPoison.get(link,[{"Cookie", cookies}]) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-        IO.inspect(body)
-        {:ok, body}
+        cells = body
+        |> Jason.decode!()
+        |> Map.get("cells")
+        |> Enum.filter(fn cell ->
+          accepted_cell_type?(cell, ["code", "markdown"]) &&
+          accepted_cell_tags?(cell, ["ex"])
+        end)
+        |> Enum.map(fn cell ->
+          case Map.get(cell, "cell_type") do
+            "markdown" -> convert_markdown(cell)
+            "code" -> convert_python(cell)
+            _ -> ""
+          end
+        end)
+        IO.inspect(cells)
+        {:ok, cells}
       _ ->
         {:error}
     end
-  end 
+  end
+
+  defp convert_markdown(cell) do
+    input = cell
+    |> Map.get("source")
+    |> String.join("")
+    {input, nil}
+  end
+
+  defp convert_python(cell) do
+    input = cell
+    |> Map.get("source")
+    |> String.join("")
+
+    output = cell
+    |> Map.get("outputs")
+    |> Enum.map(fn output ->
+      output
+      |> Map.get("text")
+      |> String.join("")
+    end)
+    |> String.join("")
+    {input, output}
+  end
+
+
+  defp accepted_cell_tags?(cell, tags) do
+    tags
+    |> Enum.any?(fn tag ->
+      cell
+      |> Map.get("metadata") |> Map.get("tags") |> Map.any?(fn t -> t == tag end)
+    end)
+  end
+
+  defp accepted_cell_type?(cell, types) do
+    types
+    |> Enum.any?(fn type ->
+      cell
+      |> Map.get("cell_type") == type
+    end)
+  end
 
   defp extract_grade(html, userid, cookies) do
     sesskey = List.last(Regex.run(~r"\"sesskey\":\"(.*?)\"", html))
@@ -198,8 +252,8 @@ defmodule UpelWeb.LabLive do
 
             grade = tr |> Floki.find("td.grade") |> Floki.find("div[class*='w-100']") |> Floki.text() |> HtmlEntities.decode()
 
-            links = tr |> Floki.find("div[class*='fileuploadsubmission'] > a") #|> Floki.attribute("href") 
-            urls = links |> Floki.attribute("href") 
+            links = tr |> Floki.find("div[class*='fileuploadsubmission'] > a") #|> Floki.attribute("href")
+            urls = links |> Floki.attribute("href")
             names = links |> Enum.map(fn el -> el |> Floki.text() end)
             notebooks = List.zip([urls, names])
             IO.inspect(notebooks)

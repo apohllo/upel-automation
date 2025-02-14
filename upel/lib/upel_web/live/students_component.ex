@@ -46,6 +46,8 @@ defmodule UpelWeb.StudentsComponent do
         {:error, "Error: Received status code #{status_code} #{body}"}
       {:error, %HTTPoison.Error{reason: reason}} ->
         {:error, "Error: #{inspect(reason)}"}
+      _ ->
+        {:error, "Unknown error"}
     end
   end
 

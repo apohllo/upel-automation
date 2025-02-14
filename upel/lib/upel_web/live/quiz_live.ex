@@ -19,11 +19,13 @@ defmodule UpelWeb.QuizLive do
   end
 
   @impl true
-  def handle_info({:fetch_students, data}, socket) do
+  def handle_info({:fetch_students, cookies, data}, socket) do
     case data do
       {:ok, html} ->
         extracted_data = extract_student_data(html)
-        {:noreply, socket |> assign(:extracted_data, extracted_data)}
+        {:noreply, socket
+        |> assign(:uploaded_cookies, cookies)
+        |> assign(:extracted_data, extracted_data)}
       {:error, error} ->
         {:noreply, socket |> assign(:error, error)}
     end
