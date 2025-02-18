@@ -8,8 +8,7 @@ const path = require("path")
 module.exports = {
   content: [
     "./js/**/*.js",
-    "../lib/upel_web.ex",
-    "../lib/upel_web/**/*.*ex"
+    "../lib/*_web/**/*.*ex"
   ],
   theme: {
     extend: {
@@ -20,6 +19,7 @@ module.exports = {
   },
   plugins: [
     require("@tailwindcss/forms"),
+    require("@tailwindcss/typography"),
     // Allows prefixing tailwind classes with LiveView classes to add rules
     // only when LiveView classes are applied, for example:
     //

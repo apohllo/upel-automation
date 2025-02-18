@@ -71,21 +71,29 @@
                         </div>
                       <% end %>
                     <% else %>
-                      <div class="mt-2 text-sm input"><%= cell.input %></div>
+                      <div class="mt-2 text-sm prose max-w-none"><%= cell.input %></div>
                     <% end %>
                   <% end %>
                 <% end %>
 
-                <div class="mt-2">
-                    <label class="block text-sm font-medium text-gray-700">Mark:</label> <%= @item.mark %>
-                    <input type="text" name="mark" value={@item.generated_mark} class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+                <div class="feedback fixed top-0 left-0 w-1/6 p-4 bg-white shadow-lg overflow-y-auto h-screen">
+                  <div class="mt-2">
+                    <label class="block text-sm font-medium text-gray-700">Name:</label> <%= Enum.at(@extracted_data, @position).name %>
+                  </div>
+                  <div class="mt-2">
+                    <label class="block text-sm font-medium text-gray-700">Overdue:</label> <%= Enum.at(@extracted_data, @position).overdue %>
+                  </div>
+                  <div class="mt-2">
+                      <label class="block text-sm font-medium text-gray-700">Mark:</label> <%= @item.mark %>
+                      <input type="text" name="mark" value={@item.generated_mark} class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
+                  </div>
+                  <div class="mt-2">
+                      <label class="block text-sm font-medium text-gray-700">Comment:</label>
+                      <p><%= @item.comment %></p>
+                      <textarea name="comment" rows="12" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"><%= @item.generated_comment %></textarea>
+                  </div>
+                  <button type="submit" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded-md">Add Feedback</button>
                 </div>
-                <div class="mt-2">
-                    <label class="block text-sm font-medium text-gray-700">Comment:</label>
-                    <p><%= @item.comment %></p>
-                    <textarea name="comment" rows="6" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"><%= @item.generated_comment %></textarea>
-                </div>
-                <button type="submit" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded-md">Add Feedback</button>
             </div>
         </form>
         <% end %>

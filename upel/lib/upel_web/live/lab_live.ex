@@ -12,6 +12,7 @@ defmodule UpelWeb.LabLive do
     |> assign(:uploaded_cookies, nil)
     |> assign(:item, %{mark: "", comment: "", params: "", generated_mark: "", generated_comment: ""})
     |> assign(:position, nil)
+    |> assign(:content, nil)
     {:ok, socket}
   end
 
@@ -182,6 +183,8 @@ defmodule UpelWeb.LabLive do
     case data do
       %{"image/png" => content} ->
         %{content: "data:image/png;base64,#{content}", type: "image"}
+      %{"text/html" => content} ->
+        %{content: content |> Phoenix.HTML.raw(), type: "html"}
       %{"text/plain" => content} ->
         %{content: List.foldl(content, "", fn line, acc -> acc <> "<br/>" <> (Phoenix.HTML.html_escape(line) |> safe_to_string()) end) |> Phoenix.HTML.raw(), type: "html"}
       _ ->
@@ -300,14 +303,21 @@ defmodule UpelWeb.LabLive do
           student_cell = tr |> Floki.find("td[class*='username']") |> List.first()
 
           case student_cell do
-            nil -> %{name: nil, url: nil, grade: nil, notebooks: []}
+            nil -> %{name: nil, url: nil, grade: nil, notebooks: [], overdue: nil}
             cell ->
               name = cell
               |> Floki.find("a")
               |> List.first()
               |> Floki.text()
               |> String.trim()
-              |> String.slice(2..-1//1)
+
+              initials = cell
+              |> Floki.find("a > span")
+              |> List.first()
+              |> Floki.text()
+              |> String.trim()
+
+              name = String.slice(name, String.length(initials)..-1//1)
 
             url = tr |> Floki.find("td.grade") |> Floki.find("a.dropdown-item") |> Floki.attribute("href") |> List.first()
 
@@ -318,7 +328,9 @@ defmodule UpelWeb.LabLive do
             names = links |> Enum.map(fn el -> el |> Floki.text() end)
             notebooks = List.zip([urls, names])
 
-            %{name: name, url: url, grade: grade, notebooks: notebooks}
+            overdue = tr |> Floki.find("div[class*='submissioninfo'] div") |> Enum.map(fn el -> el |> Floki.text() end) |> List.foldl("", fn el, acc -> acc <> " " <> el end)
+
+            %{name: name, url: url, grade: grade, notebooks: notebooks, overdue: overdue}
           end
         end)
         |> Enum.filter(fn %{name: name, url: url} -> name != nil and url != nil end)
