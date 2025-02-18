@@ -1,5 +1,6 @@
-<div class="max-w-4xl mx-auto p-6">
+<div class="max-w-7xl mx-auto p-6">
   <h1 class="text-2xl font-bold mb-6">Labs</h1>
+  <style><%= Makeup.stylesheet() %></style>
   <.live_component
     module={UpelWeb.StudentsComponent}
     id="students"
@@ -19,12 +20,14 @@
       <ul>
       <li>
         <%= for {item, index} <- Enum.with_index(@extracted_data) do %>
+          <hr class="my-4" />
           <form phx-submit="fetch_answers">
-            <a href={item.url}><%= item.name %> - <%= item.grade %></a> 
+            <a href={item.url}><%= item.name %> - <%= item.grade %></a>
             <ul>
               <%= for {link, title} <- item.notebooks do %>
               <li><a href={link}><%= title %></a></li>
               <input type="hidden" name="files[]" value={link} />
+              <input type="hidden" name="names[]" value={title} />
               <% end %>
             </ul>
             <input type="hidden" name="answer_url" value={item.url} />
@@ -38,10 +41,33 @@
             <div class="mt-4">
                 <input type="hidden" name="params" value={@item.params} />
                 <input type="hidden" name="assignment_id" value={@item.assignment_id} />
-                <%= for link <- @item.files do %>
-                  <li><a href={link}>plik</a></li>
+                <%= for {link, name} <- List.zip([@item.files, @item.names]) do %>
+                  <li><a href={link}><%= name %></a></li>
                   <input type="hidden" name="files[]" value={link} />
                 <% end %>
+                <%= for cells <- @item.solutions do %>
+                  <%= for cell <- cells do %>
+                    <%= if cell.type == "code" do %>
+                      <div class="mt-2 code-block text-sm"><%= cell.input %></div>
+                      <%= for output <- cell.outputs do %>
+                        <div class="mt-2 code-block text-sm highlight font-mono">
+                          <%= if output.type == "html" do %>
+                            <%= output.content %>
+                          <% else %>
+                            <%= if output.type == "image" do %>
+                              <img src={output.content} alt="Image" />
+                            <% else %>
+                              <span class="bg-red-500 text-white"> <%= output.content %> </span>
+                            <% end %>
+                          <% end %>
+                        </div>
+                      <% end %>
+                    <% else %>
+                      <div class="mt-2 text-sm"><%= cell.input %></div>
+                    <% end %>
+                  <% end %>
+                <% end %>
+
                 <div class="mt-2">
                     <label class="block text-sm font-medium text-gray-700">Mark:</label> <%= @item.mark %>
                     <input type="text" name="mark" value={@item.generated_mark} class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />

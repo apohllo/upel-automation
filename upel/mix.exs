@@ -57,7 +57,10 @@ defmodule Upel.MixProject do
       {:bandit, "~> 1.2"},
       {:httpoison, "~> 2.0"},
       {:dotenv, "~> 3.1.0"},
-      {:html_entities, "~> 0.5"}
+      {:html_entities, "~> 0.5"},
+      {:earmark, "~> 1.4"},
+      {:makeup, "~> 1.0"},
+      {:makeup_syntect, "~> 0.1"}
     ]
   end
 
