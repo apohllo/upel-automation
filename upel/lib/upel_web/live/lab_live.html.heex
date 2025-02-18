@@ -37,6 +37,14 @@
           </form>
 
         <%= if @position == index && !@done do %>
+        <style>
+          .input {
+            h1, h2, h3, h4, h5, h6 {
+              font-weight: bold;
+              font-size: 1.2rem;
+            }
+          }
+        </style>
         <form phx-submit="add_feedback" class="mt-4">
             <div class="mt-4">
                 <input type="hidden" name="params" value={@item.params} />
@@ -63,7 +71,7 @@
                         </div>
                       <% end %>
                     <% else %>
-                      <div class="mt-2 text-sm"><%= cell.input %></div>
+                      <div class="mt-2 text-sm input"><%= cell.input %></div>
                     <% end %>
                   <% end %>
                 <% end %>
